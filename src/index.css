@@ -1,0 +1,283 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Force 24-hour time format */
+input[type="time"] {
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hide AM/PM in time picker - Webkit browsers */
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.5);
+  cursor: pointer;
+}
+
+/* Force 24h format - Chrome/Edge */
+input[type="time"][lang^="en-"]::-webkit-datetime-edit-text {
+  display: none;
+}
+
+/* Thai locale uses 24h by default */
+input[type="time"][lang="th"] {
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 1rem;
+    
+    /* New colors for modern theme */
+    --success: 142.1 76.2% 36.3%;
+    --success-foreground: 210 40% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 222.2 84% 4.9%;
+    --info: 199 89% 48%;
+    --info-foreground: 210 40% 98%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+    font-optical-sizing: auto;
+  }
+}
+
+@layer components {
+  /* Modern glassmorphism effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-lg border border-white/20 shadow-lg;
+  }
+  
+  .glass-dark {
+    @apply bg-black/80 backdrop-blur-lg border border-white/10 shadow-lg;
+  }
+  
+  /* Gradient backgrounds */
+  .gradient-primary {
+    @apply bg-gradient-to-br from-primary/90 to-primary shadow-lg shadow-primary/30;
+  }
+  
+  .gradient-success {
+    @apply bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-500/30;
+  }
+  
+  .gradient-warning {
+    @apply bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-orange-500/30;
+  }
+  
+  .gradient-danger {
+    @apply bg-gradient-to-br from-red-500 to-rose-600 shadow-lg shadow-red-500/30;
+  }
+  
+  .gradient-blue {
+    @apply bg-gradient-to-br from-blue-400 to-cyan-500 shadow-lg shadow-cyan-500/30;
+  }
+  
+  .gradient-purple {
+    @apply bg-gradient-to-br from-purple-400 to-pink-500 shadow-lg shadow-purple-500/30;
+  }
+  
+  /* Animated gradient background */
+  .gradient-animated {
+    @apply bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-[length:200%_200%] animate-gradient;
+  }
+  
+  /* Card styles */
+  .card-modern {
+    @apply bg-card rounded-2xl shadow-xl shadow-black/5 border border-border/50 overflow-hidden;
+  }
+  
+  .card-glass {
+    @apply glass rounded-2xl;
+  }
+  
+  /* Button styles */
+  .btn-modern {
+    @apply px-6 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl;
+  }
+  
+  .btn-glass {
+    @apply glass px-6 py-3 rounded-xl font-semibold transition-all duration-300 hover:shadow-xl active:scale-95;
+  }
+  
+  /* Input styles */
+  .input-modern {
+    @apply w-full px-4 py-3 rounded-xl border-2 border-border bg-background/50 focus:bg-background focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-300 outline-none;
+  }
+  
+  /* Status badges */
+  .badge-success {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-green-100 text-green-700 shadow-sm;
+  }
+  
+  .badge-warning {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-amber-100 text-amber-700 shadow-sm;
+  }
+  
+  .badge-danger {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-red-100 text-red-700 shadow-sm;
+  }
+  
+  .badge-info {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-blue-100 text-blue-700 shadow-sm;
+  }
+  
+  /* Bottom navigation for mobile */
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 glass border-t border-border/50 px-4 py-2 z-50 lg:hidden;
+  }
+  
+  .bottom-nav-item {
+    @apply flex flex-col items-center justify-center gap-1 p-2 rounded-xl transition-all duration-200 text-muted-foreground hover:text-primary hover:bg-primary/5;
+  }
+  
+  .bottom-nav-item.active {
+    @apply text-primary bg-primary/10;
+  }
+  
+  /* Animations */
+  @keyframes gradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+  
+  @keyframes pulse-ring {
+    0% { transform: scale(0.8); opacity: 0.5; }
+    100% { transform: scale(2); opacity: 0; }
+  }
+  
+  @keyframes slide-up {
+    from { transform: translateY(100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  
+  @keyframes slide-down {
+    from { transform: translateY(-100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes scale-in {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  
+  .animate-gradient {
+    animation: gradient 15s ease infinite;
+  }
+  
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  .animate-pulse-ring::before {
+    content: '';
+    @apply absolute inset-0 rounded-full bg-primary/30;
+    animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  .animate-slide-up {
+    animation: slide-up 0.3s ease-out;
+  }
+  
+  .animate-slide-down {
+    animation: slide-down 0.3s ease-out;
+  }
+  
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+  }
+  
+  .animate-scale-in {
+    animation: scale-in 0.3s ease-out;
+  }
+  
+  /* Touch-friendly spacing for mobile */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  
+  /* Safe area insets for mobile devices */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  /* Scrollbar styling */
+  .custom-scrollbar::-webkit-scrollbar {
+    @apply w-1.5 h-1.5;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+}

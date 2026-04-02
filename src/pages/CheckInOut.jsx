@@ -1,0 +1,643 @@
+import React, { useState, useRef, useEffect } from 'react'
+import { useAuth } from '@/hooks/useAuth'
+import { useCheckIn } from '@/hooks/useCheckIn'
+import Layout from '@/components/Layout'
+import GPSPicker from '@/components/GPSPicker'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useToast } from '@/components/ui/use-toast'
+import { Clock, CheckCircle, LogOut, MapPin, Camera, Upload, Save, Calendar, User, Briefcase, Home, Building } from 'lucide-react'
+import { format } from 'date-fns'
+import { supabase } from '@/services/supabase'
+import { cn } from '@/lib/utils'
+
+export default function CheckInOut() {
+  const { employee } = useAuth()
+  const { toast } = useToast()
+  const {
+    todayRecord,
+    loading,
+    checkIn,
+    checkOut,
+    fetchTodayRecord,
+    isCheckedIn,
+    isCheckedOut,
+  } = useCheckIn(employee?.id)
+
+  const [shifts, setShifts] = useState([])
+  const [selectedShift, setSelectedShift] = useState('')
+  const [workType, setWorkType] = useState('office')
+  const [location, setLocation] = useState({ lat: null, lng: null })
+
+  // Check-in fields
+  const [checkInTime, setCheckInTime] = useState(format(new Date(), 'HH:mm'))
+  const [checkInFile, setCheckInFile] = useState(null)
+
+  // Check-out fields
+  const [checkOutTime, setCheckOutTime] = useState(format(new Date(), 'HH:mm'))
+  const [checkOutFile, setCheckOutFile] = useState(null)
+
+  const checkInInputRef = useRef(null)
+  const checkOutInputRef = useRef(null)
+
+  // Convert 24h to 12h format for display
+  const formatTo12Hour = (time24h) => {
+    if (!time24h) return ''
+    const [hours, minutes] = time24h.split(':')
+    const h = parseInt(hours)
+    const ampm = h >= 12 ? 'PM' : 'AM'
+    const h12 = h % 12 || 12
+    return `${h12}:${minutes || '00'} ${ampm}`
+  }
+
+  // Convert 12h to 24h format for storage
+  const parseTo24Hour = (time12h) => {
+    if (!time12h) return ''
+    const match = time12h.match(/(\d+):(\d+)\s*(AM|PM)/i)
+    if (!match) return time12h
+
+    let h = parseInt(match[1])
+    const m = match[2]
+    const ampm = match[3].toUpperCase()
+
+    if (ampm === 'PM' && h !== 12) h += 12
+    if (ampm === 'AM' && h === 12) h = 0
+
+    return `${String(h).padStart(2, '0')}:${m}`
+  }
+
+  // Fetch shifts and today's record
+  useEffect(() => {
+    const fetchData = async () => {
+      // Get shifts
+      const { data } = await supabase
+        .from('shifts')
+        .select('*')
+        .eq('is_active', true)
+        .order('start_time')
+      setShifts(data || [])
+
+      // Get today's record
+      if (employee?.id) {
+        await fetchTodayRecord()
+      }
+    }
+    fetchData()
+  }, [employee?.id])
+
+  // Update form when todayRecord changes
+  useEffect(() => {
+    if (todayRecord) {
+      if (todayRecord.check_in) {
+        const time = format(new Date(todayRecord.check_in), 'HH:mm')
+        setCheckInTime(time)
+      }
+      if (todayRecord.check_out) {
+        const time = format(new Date(todayRecord.check_out), 'HH:mm')
+        setCheckOutTime(time)
+      }
+      if (todayRecord.shift_id) {
+        setSelectedShift(todayRecord.shift_id)
+      }
+      if (todayRecord.work_type) {
+        setWorkType(todayRecord.work_type)
+      }
+    }
+  }, [todayRecord])
+
+  const handleTimeChange = (e, isCheckIn) => {
+    let value = e.target.value
+
+    // Allow only digits and colon
+    let cleaned = value.replace(/[^0-9:]/g, '')
+
+    // Auto-format: if user types 1300, convert to 13:00
+    if (cleaned.length === 3 && !cleaned.includes(':')) {
+      cleaned = `${cleaned.slice(0, 2)}:${cleaned.slice(2)}`
+    } else if (cleaned.length === 4 && !cleaned.includes(':')) {
+      cleaned = `${cleaned.slice(0, 2)}:${cleaned.slice(2)}`
+    }
+
+    // Validate format HH:MM
+    if (/^\d{1,2}:\d{2}$/.test(cleaned)) {
+      const [hours, minutes] = cleaned.split(':')
+      const h = parseInt(hours)
+      const m = parseInt(minutes)
+
+      // Validate hours (0-23) and minutes (0-59)
+      if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+        const formatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+        if (isCheckIn) {
+          setCheckInTime(formatted)
+        } else {
+          setCheckOutTime(formatted)
+        }
+        return
+      }
+    }
+
+    // Allow empty or partial input
+    if (cleaned === '' || /^\d{1,2}$/.test(cleaned) || /^\d{1,2}:$/.test(cleaned) || /^\d{1,2}:\d{1}$/.test(cleaned)) {
+      if (isCheckIn) {
+        setCheckInTime(cleaned)
+      } else {
+        setCheckOutTime(cleaned)
+      }
+    }
+  }
+
+  const handleFileSelect = (e, isCheckIn) => {
+    const file = e.target.files[0]
+    if (file && file.type.startsWith('image/')) {
+      if (isCheckIn) {
+        setCheckInFile(file)
+      } else {
+        setCheckOutFile(file)
+      }
+    }
+  }
+
+  const handleSave = async () => {
+    if (!selectedShift) {
+      toast({
+        title: 'Error',
+        description: 'กรุณาเลือกกะงาน',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    try {
+      // Save Check-in with user-entered time
+      if (checkInTime) {
+        await checkIn(checkInFile, location.lat, location.lng, workType, selectedShift, checkInTime)
+      }
+
+      // Save Check-out with user-entered time
+      if (checkOutTime && isCheckedIn) {
+        await checkOut(checkOutFile, location.lat, location.lng, checkOutTime)
+      }
+
+      toast({
+        title: 'Success',
+        description: 'บันทึกข้อมูลเวลาทำงานแล้ว',
+      })
+
+      // Reset files
+      setCheckInFile(null)
+      setCheckOutFile(null)
+      if (checkInInputRef.current) checkInInputRef.current.value = ''
+      if (checkOutInputRef.current) checkOutInputRef.current.value = ''
+
+      await fetchTodayRecord()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err.message,
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const formatTime = (time) => {
+    if (!time) return ''
+    // time is already in 24-hour format (HH:MM:SS or HH:MM)
+    return time.substring(0, 5) // HH:MM
+  }
+
+  const getImagePreview = (file) => {
+    if (file) {
+      return URL.createObjectURL(file)
+    }
+    return null
+  }
+
+  const workTypeOptions = [
+    { value: 'office', label: 'ทำงานที่ร้าน', icon: Building, gradient: 'from-blue-400 to-cyan-500' },
+  ]
+
+  const getStatusCard = () => {
+    if (!todayRecord) {
+      return (
+        <Card className="card-glass overflow-hidden">
+          <CardContent className="pt-6">
+            <div className="text-center py-8">
+              <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-muted/50 mb-4 animate-float">
+                <Clock className="h-12 w-12 text-muted-foreground" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">ยังไม่ได้เช็คอิน</h3>
+              <p className="text-muted-foreground mb-4">กรอกข้อมูลเวลาทำงานของคุณด้านล่าง</p>
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary">
+                <Calendar className="h-4 w-4" />
+                <span className="font-medium">
+                  {format(new Date(), 'EEEE, MMMM d, yyyy')}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )
+    }
+
+    if (isCheckedOut) {
+      return (
+        <Card className="overflow-hidden gradient-success">
+          <CardContent className="pt-6">
+            <div className="text-center py-4 text-white">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/20 mb-4 animate-scale-in">
+                <CheckCircle className="h-10 w-10" />
+              </div>
+              <h3 className="text-xl font-bold mb-3">เสร็จสิ้น</h3>
+              <div className="space-y-2 text-white/90">
+                <p className="flex items-center justify-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  {format(new Date(todayRecord.date), 'EEEE, MMMM d, yyyy')}
+                </p>
+                <p className="flex items-center justify-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  เข้างาน: {format(new Date(todayRecord.check_in), 'HH:mm')} น. ({formatTo12Hour(format(new Date(todayRecord.check_in), 'HH:mm'))})
+                </p>
+                <p className="flex items-center justify-center gap-2">
+                  <LogOut className="h-4 w-4" />
+                  เลิกงาน: {format(new Date(todayRecord.check_out), 'HH:mm')} น. ({formatTo12Hour(format(new Date(todayRecord.check_out), 'HH:mm'))})
+                </p>
+              </div>
+              {todayRecord.ot_hours > 0 && (
+                <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20">
+                  <Clock className="h-4 w-4" />
+                  <span className="font-semibold">OT: {todayRecord.ot_hours} ชั่วโมง</span>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )
+    }
+
+    return (
+      <Card className="overflow-hidden gradient-blue">
+        <CardContent className="pt-6">
+          <div className="text-center py-4 text-white">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/20 mb-4 animate-pulse-ring relative">
+              <Clock className="h-10 w-10" />
+            </div>
+            <h3 className="text-xl font-bold mb-3">เช็คอินแล้ว</h3>
+            <div className="space-y-2 text-white/90">
+              <p className="flex items-center justify-center gap-2">
+                <Calendar className="h-4 w-4" />
+                {format(new Date(todayRecord.date), 'EEEE, MMMM d, yyyy')}
+              </p>
+              <p className="flex items-center justify-center gap-2">
+                <Clock className="h-4 w-4" />
+                ตั้งแต่: {format(new Date(todayRecord.check_in), 'HH:mm')} น. ({formatTo12Hour(format(new Date(todayRecord.check_in), 'HH:mm'))})
+              </p>
+            </div>
+            {todayRecord.ot_hours > 0 && (
+              <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20">
+                <Clock className="h-4 w-4" />
+                <span className="font-semibold">OT: {todayRecord.ot_hours} ชั่วโมง</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Layout>
+      <div className="max-w-3xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center shadow-lg shadow-primary/30">
+            <Clock className="h-6 w-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+              บันทึกเวลาทำงาน
+            </h1>
+            <p className="text-muted-foreground">
+              กรอกเวลาเช็คอินและเช็คเอาท์ของคุณ
+            </p>
+          </div>
+        </div>
+
+        {getStatusCard()}
+
+        {/* Attendance Form */}
+        <Card className="card-glass">
+          <CardHeader className="border-b border-border/50">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Save className="h-4 w-4 text-primary" />
+              </div>
+              <CardTitle>แบบฟอร์มบันทึกเวลา</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Shift Selection */}
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Shift (Work Schedule) *
+              </Label>
+              <Select value={selectedShift} onValueChange={setSelectedShift}>
+                <SelectTrigger className="h-12 rounded-xl">
+                  <SelectValue placeholder="เลือกกะงาน" />
+                </SelectTrigger>
+                <SelectContent>
+                  {shifts.map((shift) => (
+                    <SelectItem key={shift.id} value={shift.id}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{shift.name}</span>
+                        <span className="text-muted-foreground text-xs">
+                          ({formatTime(shift.start_time)} - {formatTime(shift.end_time)})
+                        </span>
+                        {shift.ot_start_time && shift.ot_end_time && (
+                          <span className="text-xs text-orange-600 font-medium">• มี OT</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedShift && (
+                <p className="text-xs text-primary font-medium flex items-center gap-1">
+                  <CheckCircle className="h-3 w-3" />
+                  Selected: {shifts.find(s => s.id === selectedShift)?.name}
+                </p>
+              )}
+            </div>
+
+            {/* Work Type */}
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold flex items-center gap-2">
+                <Briefcase className="h-4 w-4" />
+                Work Type
+              </Label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {workTypeOptions.map((option) => {
+                  const Icon = option.icon
+                  const isSelected = workType === option.value
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => setWorkType(option.value)}
+                      className={cn(
+                        "relative p-4 rounded-xl border-2 transition-all duration-300 text-left",
+                        "hover:shadow-lg active:scale-98 touch-target",
+                        isSelected
+                          ? `border-transparent bg-gradient-to-br ${option.gradient} text-white shadow-lg`
+                          : "border-border bg-background/50 hover:border-primary/30"
+                      )}
+                    >
+                      <Icon className={cn(
+                        "h-6 w-6 mb-2",
+                        isSelected ? "text-white" : "text-muted-foreground"
+                      )} />
+                      <p className={cn(
+                        "text-sm font-medium",
+                        isSelected ? "text-white" : "text-foreground"
+                      )}>
+                        {option.label}
+                      </p>
+                      {isSelected && (
+                        <div className="absolute top-2 right-2">
+                          <CheckCircle className="h-4 w-4 text-white" />
+                        </div>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Check-in Section */}
+            <div className="border-t border-border/50 pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center",
+                    isCheckedIn ? "bg-green-100" : "bg-muted"
+                  )}>
+                    <CheckCircle className={cn(
+                      "h-4 w-4",
+                      isCheckedIn ? "text-green-600" : "text-muted-foreground"
+                    )} />
+                  </div>
+                  <h3 className="font-semibold">เช็คอิน (เข้างาน)</h3>
+                </div>
+                {isCheckedIn && (
+                  <span className="badge-success">
+                    <CheckCircle className="h-3 w-3" />
+                    สำเร็จแล้ว
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">เวลาเข้างาน *</Label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={checkInTime}
+                      onChange={(e) => handleTimeChange(e, true)}
+                      disabled={loading}
+                      placeholder="00:00"
+                      maxLength={5}
+                      className="pl-10 h-12 rounded-xl font-mono text-center text-lg"
+                    />
+                  </div>
+                  {checkInTime && (
+                    <p className="text-xs text-blue-600 font-medium flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      = {formatTo12Hour(checkInTime)}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    กรอกแบบ 24 ชม. (เช่น 09:00, 13:00, 21:00)
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">รูปถ่าย (ไม่บังคับ)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => checkInInputRef.current?.click()}
+                    className="w-full h-12 rounded-xl"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    อัปโหลดรูป
+                  </Button>
+                  <input
+                    ref={checkInInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleFileSelect(e, true)}
+                  />
+                  {checkInFile && (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3" />
+                      {checkInFile.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {checkInFile && (
+                <div className="mt-3">
+                  <div className="relative rounded-xl overflow-hidden border-2 border-green-200">
+                    <img
+                      src={getImagePreview(checkInFile)}
+                      alt="Check-in preview"
+                      className="w-full h-48 object-cover"
+                    />
+                    <div className="absolute top-2 left-2 px-2 py-1 rounded-lg bg-green-600 text-white text-xs font-medium flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3" />
+                      Check-in
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Check-out Section */}
+            <div className="border-t border-border/50 pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center",
+                    isCheckedOut ? "bg-green-100" : "bg-muted"
+                  )}>
+                    <LogOut className={cn(
+                      "h-4 w-4",
+                      isCheckedOut ? "text-green-600" : "text-muted-foreground"
+                    )} />
+                  </div>
+                  <h3 className="font-semibold">เช็คเอาท์ (เลิกงาน)</h3>
+                </div>
+                {isCheckedOut && (
+                  <span className="badge-success">
+                    <CheckCircle className="h-3 w-3" />
+                    สำเร็จแล้ว
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">เวลาเลิกงาน *</Label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={checkOutTime}
+                      onChange={(e) => handleTimeChange(e, false)}
+                      disabled={loading || !isCheckedIn}
+                      placeholder="00:00"
+                      maxLength={5}
+                      className="pl-10 h-12 rounded-xl font-mono text-center text-lg disabled:opacity-50"
+                    />
+                  </div>
+                  {checkOutTime && isCheckedIn && (
+                    <p className="text-xs text-blue-600 font-medium flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      = {formatTo12Hour(checkOutTime)}
+                    </p>
+                  )}
+                  {!isCheckedIn && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      เช็คอินก่อนจึงจะเช็คเอาท์ได้
+                    </p>
+                  )}
+                  {isCheckedIn && (
+                    <p className="text-xs text-muted-foreground">
+                      กรอกแบบ 24 ชม. (เช่น 17:00, 18:30, 21:00)
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">รูปถ่าย (ไม่บังคับ)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => checkOutInputRef.current?.click()}
+                    className="w-full h-12 rounded-xl"
+                    disabled={!isCheckedIn}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    อัปโหลดรูป
+                  </Button>
+                  <input
+                    ref={checkOutInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleFileSelect(e, false)}
+                  />
+                  {checkOutFile && (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3" />
+                      {checkOutFile.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {checkOutFile && (
+                <div className="mt-3">
+                  <div className="relative rounded-xl overflow-hidden border-2 border-green-200">
+                    <img
+                      src={getImagePreview(checkOutFile)}
+                      alt="Check-out preview"
+                      className="w-full h-48 object-cover"
+                    />
+                    <div className="absolute top-2 left-2 px-2 py-1 rounded-lg bg-blue-600 text-white text-xs font-medium flex items-center gap-1">
+                      <LogOut className="h-3 w-3" />
+                      Check-out
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Save Button */}
+            <Button
+              onClick={handleSave}
+              disabled={loading || !selectedShift || !checkInTime}
+              className="w-full h-14 text-lg font-semibold rounded-xl gradient-primary hover:shadow-2xl hover:shadow-primary/40 active:scale-98 transition-all"
+            >
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  กำลังบันทึก...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Save className="h-5 w-5" />
+                  บันทึกเวลาทำงาน
+                </div>
+              )}
+            </Button>
+
+            <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1">
+              <CheckCircle className="h-3 w-3" />
+              สามารถบันทึกก่อน แล้วค่อยมาอัปโหลดรูปทีหลังได้
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </Layout>
+  )
+}
