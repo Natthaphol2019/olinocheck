@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { useSearchParams } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import { getAllEmployees } from '@/services/employeeService'
 import { getTimeRecords } from '@/services/timeService'
@@ -15,6 +16,7 @@ import { cn } from '@/lib/utils'
 
 export default function EmployeeAttendanceHistory() {
   const { employee, loading } = useAuth()
+  const [searchParams] = useSearchParams()
   const { toast } = useToast()
   const [employees, setEmployees] = useState([])
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null)
@@ -30,8 +32,14 @@ export default function EmployeeAttendanceHistory() {
   useEffect(() => {
     if (!loading && employee?.id) {
       fetchEmployees()
+      
+      // Check if employee ID is in URL parameter
+      const empId = searchParams.get('employee')
+      if (empId) {
+        setSelectedEmployeeId(empId)
+      }
     }
-  }, [employee?.id, loading])
+  }, [employee?.id, loading, searchParams])
 
   useEffect(() => {
     if (selectedEmployeeId) {
@@ -45,8 +53,13 @@ export default function EmployeeAttendanceHistory() {
       const data = await getAllEmployees()
       setEmployees(data || [])
       
-      // Auto-select first employee if none selected
-      if (!selectedEmployeeId && data && data.length > 0) {
+      // Auto-select employee from URL or first employee
+      const empId = searchParams.get('employee')
+      if (empId) {
+        setSelectedEmployeeId(empId)
+        const emp = data.find(e => e.id === empId)
+        setSelectedEmployee(emp)
+      } else if (!selectedEmployeeId && data && data.length > 0) {
         setSelectedEmployeeId(data[0].id)
         setSelectedEmployee(data[0])
       }

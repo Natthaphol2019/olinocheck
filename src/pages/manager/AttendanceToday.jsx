@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { useNavigate } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import { getAllTimeRecords } from '@/services/timeService'
 import { getAllEmployees } from '@/services/employeeService'
@@ -16,6 +17,7 @@ import Papa from 'papaparse'
 
 export default function AttendanceToday() {
   const { employee } = useAuth()
+  const navigate = useNavigate()
   const { toast } = useToast()
   const [attendanceRecords, setAttendanceRecords] = useState([])
   const [allEmployees, setAllEmployees] = useState([])
@@ -96,6 +98,10 @@ export default function AttendanceToday() {
     return shifts.find(s => s.id === assignment.shift_id)
   }
 
+  const handleEmployeeClick = (employeeId) => {
+    navigate(`/manager/employee-attendance?employee=${employeeId}`)
+  }
+
   const formatTime = (time) => {
     if (!time) return '-'
     return time.substring(0, 5) // HH:MM
@@ -144,8 +150,8 @@ export default function AttendanceToday() {
     window.URL.revokeObjectURL(url)
 
     toast({
-      title: 'Export Successful',
-      description: 'Attendance data has been downloaded',
+      title: 'ส่งออกสำเร็จ',
+      description: 'ดาวน์โหลดข้อมูลการเข้างานแล้ว',
     })
   }
 
@@ -154,19 +160,33 @@ export default function AttendanceToday() {
   const absentCount = allEmployees.filter(e => getAttendanceStatus(e.id) === 'absent').length
   const lateCount = allEmployees.filter(e => getAttendanceStatus(e.id) === 'late').length
 
+  const monthsThai = [
+    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+  ]
+
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'present': return 'มางาน'
+      case 'absent': return 'ขาดงาน'
+      case 'late': return 'สาย'
+      default: return status
+    }
+  }
+
   return (
     <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Attendance Today</h1>
+            <h1 className="text-3xl font-bold">การเข้างานวันนี้</h1>
             <p className="text-muted-foreground">
-              {format(new Date(), 'EEEE, MMMM d, yyyy')}
+              {format(new Date(), `EEEE d ${monthsThai[format(new Date(), 'M') - 1]} yyyy`)}
             </p>
           </div>
           <Button onClick={exportToCSV}>
             <Download className="h-4 w-4 mr-2" />
-            Export CSV
+            ส่งออก CSV
           </Button>
         </div>
 
@@ -174,7 +194,7 @@ export default function AttendanceToday() {
         <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
+              <CardTitle className="text-sm font-medium">พนักงานทั้งหมด</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -183,7 +203,7 @@ export default function AttendanceToday() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Present</CardTitle>
+              <CardTitle className="text-sm font-medium">มางาน</CardTitle>
               <CheckCircle className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
@@ -192,7 +212,7 @@ export default function AttendanceToday() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Absent</CardTitle>
+              <CardTitle className="text-sm font-medium">ขาดงาน</CardTitle>
               <X className="h-4 w-4 text-red-600" />
             </CardHeader>
             <CardContent>
@@ -201,7 +221,7 @@ export default function AttendanceToday() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Late</CardTitle>
+              <CardTitle className="text-sm font-medium">มาสาย</CardTitle>
               <Clock className="h-4 w-4 text-orange-600" />
             </CardHeader>
             <CardContent>
@@ -213,7 +233,7 @@ export default function AttendanceToday() {
         {/* Filter */}
         <Card>
           <CardHeader>
-            <CardTitle>Filter</CardTitle>
+            <CardTitle>ตัวกรอง</CardTitle>
           </CardHeader>
           <CardContent>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -221,10 +241,10 @@ export default function AttendanceToday() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Employees</SelectItem>
-                <SelectItem value="present">Present Only</SelectItem>
-                <SelectItem value="absent">Absent Only</SelectItem>
-                <SelectItem value="late">Late Only</SelectItem>
+                <SelectItem value="all">ทั้งหมด</SelectItem>
+                <SelectItem value="present">มางานเท่านั้น</SelectItem>
+                <SelectItem value="absent">ขาดงานเท่านั้น</SelectItem>
+                <SelectItem value="late">สายเท่านั้น</SelectItem>
               </SelectContent>
             </Select>
           </CardContent>
@@ -240,23 +260,23 @@ export default function AttendanceToday() {
             ) : filteredData.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No employees found</p>
+                <p>ไม่พบพนักงาน</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Shift</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Check In</TableHead>
-                      <TableHead>Check Out</TableHead>
-                      <TableHead>OT Hours</TableHead>
-                      <TableHead>Work Type</TableHead>
-                      <TableHead>Evidence</TableHead>
+                      <TableHead>พนักงาน</TableHead>
+                      <TableHead>แผนก</TableHead>
+                      <TableHead>กะงาน</TableHead>
+                      <TableHead>สถานะ</TableHead>
+                      <TableHead>วันที่</TableHead>
+                      <TableHead>เข้างาน</TableHead>
+                      <TableHead>เลิกงาน</TableHead>
+                      <TableHead>ชั่วโมง OT</TableHead>
+                      <TableHead>ประเภทงาน</TableHead>
+                      <TableHead>หลักฐาน</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -264,10 +284,17 @@ export default function AttendanceToday() {
                       const record = getEmployeeRecord(emp.id)
                       const status = getAttendanceStatus(emp.id)
                       const shift = getEmployeeShift(emp.id)
-                      
+
                       return (
                         <TableRow key={emp.id}>
-                          <TableCell className="font-medium">{emp.name}</TableCell>
+                          <TableCell>
+                            <button
+                              onClick={() => handleEmployeeClick(emp.id)}
+                              className="font-medium text-blue-600 hover:underline cursor-pointer"
+                            >
+                              {emp.name}
+                            </button>
+                          </TableCell>
                           <TableCell>{emp.department?.name || '-'}</TableCell>
                           <TableCell>
                             {shift ? (
@@ -283,13 +310,13 @@ export default function AttendanceToday() {
                           </TableCell>
                           <TableCell>
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-                              {status}
+                              {getStatusLabel(status)}
                             </span>
                           </TableCell>
                           <TableCell>
                             {record?.date ? (
                               <span className="text-sm">
-                                {format(new Date(record.date), 'MMM d, yyyy')}
+                                {format(new Date(record.date), `d ${monthsThai[format(new Date(record.date), 'M') - 1]} yyyy`)}
                               </span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
@@ -334,17 +361,21 @@ export default function AttendanceToday() {
                           <TableCell>
                             {record?.ot_hours > 0 ? (
                               <span className="text-sm font-medium text-orange-600">
-                                {record.ot_hours} hrs
+                                {record.ot_hours} ชม.
                               </span>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
                           </TableCell>
-                          <TableCell className="capitalize">{record?.work_type || '-'}</TableCell>
+                          <TableCell>
+                            {record?.work_type === 'office' ? 'สำนักงาน' : 
+                             record?.work_type === 'wfh' ? 'WFH' : 
+                             record?.work_type === 'field' ? 'ภายนอก' : '-'}
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               {record?.check_in_image && (
-                                <span className="text-xs text-green-600">✓ Photo</span>
+                                <span className="text-xs text-green-600">✓ มีรูป</span>
                               )}
                               {record?.lat && record?.lng && (
                                 <span className="text-xs text-blue-600">✓ GPS</span>
@@ -365,7 +396,9 @@ export default function AttendanceToday() {
         <Dialog open={showImageDialog} onOpenChange={setShowImageDialog}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>{selectedImage?.type} Photo</DialogTitle>
+              <DialogTitle>
+                {selectedImage?.type === 'Check-in' ? 'รูปเช็คอิน' : 'รูปเช็คเอาท์'}
+              </DialogTitle>
             </DialogHeader>
             {selectedImage?.url ? (
               <div className="relative">
@@ -377,7 +410,7 @@ export default function AttendanceToday() {
               </div>
             ) : (
               <div className="flex items-center justify-center py-8">
-                <p className="text-muted-foreground">No image available</p>
+                <p className="text-muted-foreground">ไม่มีรูปภาพ</p>
               </div>
             )}
           </DialogContent>
