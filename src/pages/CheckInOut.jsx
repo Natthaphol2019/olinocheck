@@ -442,13 +442,18 @@ export default function CheckInOut() {
                               OT: {formatTime(shift.ot_start_time)} - {formatTime(shift.ot_end_time)}
                             </p>
                           )}
-                          {shift.grace_period_minutes && (
+                          {shift.grace_period_minutes > 0 && (
                             <p className={cn(isSelected ? "text-white/80" : "text-yellow-600")}>
                               สายหลังจาก: {(() => {
-                                const startTime = new Date(`2000-01-01 ${shift.start_time}`)
-                                const graceTime = new Date(startTime.getTime() + (shift.grace_period_minutes || 15) * 60000)
-                                return formatTime(graceTime.toISOString().substring(11, 16))
-                              })()} น.
+                                if (!shift.start_time || !shift.grace_period_minutes) return null;
+                                const [hours, minutes] = shift.start_time.split(':');
+                                const h = parseInt(hours);
+                                const m = parseInt(minutes);
+                                const graceM = m + (shift.grace_period_minutes || 15);
+                                const graceH = h + Math.floor(graceM / 60);
+                                const graceMin = graceM % 60;
+                                return `${String(graceH).padStart(2, '0')}:${String(graceMin).padStart(2, '0')} น.`;
+                              })()}
                             </p>
                           )}
                         </div>

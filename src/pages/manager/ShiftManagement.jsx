@@ -133,16 +133,21 @@ export default function ShiftManagement() {
                         </div>
                       </>
                     )}
-                    {shift.grace_period_minutes && (
+                    {shift.grace_period_minutes > 0 && (
                       <div className="border-t pt-3">
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground">สายหลังจาก:</span>
                           <span className="font-bold text-yellow-600">
                             {(() => {
-                              const startTime = new Date(`2000-01-01 ${shift.start_time}`)
-                              const graceTime = new Date(startTime.getTime() + (shift.grace_period_minutes || 15) * 60000)
-                              return formatTime(graceTime.toISOString().substring(11, 16))
-                            })()} น.
+                              if (!shift.start_time || !shift.grace_period_minutes) return '-';
+                              const [hours, minutes] = shift.start_time.split(':');
+                              const h = parseInt(hours);
+                              const m = parseInt(minutes);
+                              const graceM = m + (shift.grace_period_minutes || 15);
+                              const graceH = h + Math.floor(graceM / 60);
+                              const graceMin = graceM % 60;
+                              return `${String(graceH).padStart(2, '0')}:${String(graceMin).padStart(2, '0')} น.`;
+                            })()}
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
