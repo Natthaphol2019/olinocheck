@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
 import { Clock, CheckCircle, LogOut, MapPin, Camera, Upload, Save, Calendar, User, Briefcase, Home, Building } from 'lucide-react'
-import { format } from 'date-fns'
+import { format, subDays, startOfMonth } from 'date-fns'
 import { supabase } from '@/services/supabase'
 import { cn } from '@/lib/utils'
 
@@ -32,12 +32,15 @@ export default function CheckInOut() {
   const [workType, setWorkType] = useState('office')
   const [location, setLocation] = useState({ lat: null, lng: null })
 
+  // Date selection (retroactive)
+  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+
   // Check-in fields
   const [checkInTime, setCheckInTime] = useState(format(new Date(), 'HH:mm'))
   const [checkInFile, setCheckInFile] = useState(null)
 
   // Check-out fields
-  const [checkOutTime, setCheckOutTime] = useState(format(new Date(), 'HH:mm'))
+  const [checkOutTime, setCheckOutTime] = useState('')
   const [checkOutFile, setCheckOutFile] = useState(null)
 
   const checkInInputRef = useRef(null)
@@ -69,7 +72,7 @@ export default function CheckInOut() {
     return `${String(h).padStart(2, '0')}:${m}`
   }
 
-  // Fetch shifts and today's record
+  // Fetch shifts and selected date's record
   useEffect(() => {
     const fetchData = async () => {
       // Get shifts
@@ -80,33 +83,77 @@ export default function CheckInOut() {
         .order('start_time')
       setShifts(data || [])
 
-      // Get today's record
+      // Get selected date's record
       if (employee?.id) {
-        await fetchTodayRecord()
+        await fetchDateRecord(selectedDate)
       }
     }
     fetchData()
-  }, [employee?.id])
+  }, [employee?.id, selectedDate])
 
-  // Update form when todayRecord changes
-  useEffect(() => {
-    if (todayRecord) {
-      if (todayRecord.check_in) {
-        const time = format(new Date(todayRecord.check_in), 'HH:mm')
-        setCheckInTime(time)
-      }
-      if (todayRecord.check_out) {
-        const time = format(new Date(todayRecord.check_out), 'HH:mm')
-        setCheckOutTime(time)
-      }
-      if (todayRecord.shift_id) {
-        setSelectedShift(todayRecord.shift_id)
-      }
-      if (todayRecord.work_type) {
-        setWorkType(todayRecord.work_type)
-      }
+  // Generate last 7 days for dropdown
+  const getDateOptions = () => {
+    const options = []
+    const today = new Date()
+    
+    for (let i = 0; i < 7; i++) {
+      const date = subDays(today, i)
+      const value = format(date, 'yyyy-MM-dd')
+      const label = i === 0 ? 'วันนี้' : 
+                    i === 1 ? 'เมื่อวาน' :
+                    format(date, 'd MMM yyyy')
+      options.push({ value, label })
     }
-  }, [todayRecord])
+    
+    return options
+  }
+
+  // Fetch record for specific date
+  const fetchDateRecord = async (date) => {
+    try {
+      const { data, error } = await supabase
+        .from('time_records')
+        .select('*')
+        .eq('employee_id', employee?.id)
+        .eq('date', date)
+        .single()
+
+      if (error && error.code !== 'PGRST116') {
+        throw error
+      }
+
+      if (data) {
+        // Update form with existing data
+        if (data.check_in) {
+          const time = format(new Date(data.check_in), 'HH:mm')
+          setCheckInTime(time)
+        } else {
+          setCheckInTime(format(new Date(), 'HH:mm'))
+        }
+        
+        if (data.check_out) {
+          const time = format(new Date(data.check_out), 'HH:mm')
+          setCheckOutTime(time)
+        } else {
+          setCheckOutTime('')
+        }
+        
+        if (data.shift_id) {
+          setSelectedShift(data.shift_id)
+        }
+        if (data.work_type) {
+          setWorkType(data.work_type)
+        }
+      } else {
+        // No record for this date, reset form
+        setCheckInTime(format(new Date(), 'HH:mm'))
+        setCheckOutTime('')
+        setSelectedShift('')
+      }
+    } catch (error) {
+      console.error('Error fetching date record:', error)
+    }
+  }
 
   const handleTimeChange = (e, isCheckIn) => {
     let value = e.target.value
@@ -163,27 +210,39 @@ export default function CheckInOut() {
   const handleSave = async () => {
     if (!selectedShift) {
       toast({
-        title: 'Error',
+        title: 'ข้อผิดพลาด',
         description: 'กรุณาเลือกกะงาน',
         variant: 'destructive',
       })
       return
     }
 
-    try {
-      // Save Check-in with user-entered time
-      if (checkInTime) {
-        await checkIn(checkInFile, location.lat, location.lng, workType, selectedShift, checkInTime)
-      }
+    if (!checkInTime) {
+      toast({
+        title: 'ข้อผิดพลาด',
+        description: 'กรุณากรอกเวลาเข้างาน',
+        variant: 'destructive',
+      })
+      return
+    }
 
-      // Save Check-out with user-entered time
-      if (checkOutTime && isCheckedIn) {
+    try {
+      let checkInResult = null
+      let checkOutResult = null
+
+      // Save Check-in with user-entered time
+      await checkIn(checkInFile, location.lat, location.lng, workType, selectedShift, checkInTime)
+
+      // Save Check-out with user-entered time (if provided)
+      if (checkOutTime && checkOutTime.trim() !== '') {
         await checkOut(checkOutFile, location.lat, location.lng, checkOutTime)
       }
 
       toast({
-        title: 'Success',
-        description: 'บันทึกข้อมูลเวลาทำงานแล้ว',
+        title: 'สำเร็จ',
+        description: checkOutTime ? 
+          'บันทึกเวลาเข้า-ออกงานเรียบร้อยแล้ว' : 
+          'บันทึกเวลาเข้างานเรียบร้อยแล้ว',
       })
 
       // Reset files
@@ -192,10 +251,11 @@ export default function CheckInOut() {
       if (checkInInputRef.current) checkInInputRef.current.value = ''
       if (checkOutInputRef.current) checkOutInputRef.current.value = ''
 
-      await fetchTodayRecord()
+      // Refresh the record
+      await fetchDateRecord(selectedDate)
     } catch (err) {
       toast({
-        title: 'Error',
+        title: 'ข้อผิดพลาด',
         description: err.message,
         variant: 'destructive',
       })
@@ -220,87 +280,81 @@ export default function CheckInOut() {
   ]
 
   const getStatusCard = () => {
-    if (!todayRecord) {
-      return (
-        <Card className="card-glass overflow-hidden">
-          <CardContent className="pt-6">
-            <div className="text-center py-8">
-              <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-muted/50 mb-4 animate-float">
-                <Clock className="h-12 w-12 text-muted-foreground" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">ยังไม่ได้เช็คอิน</h3>
-              <p className="text-muted-foreground mb-4">กรอกข้อมูลเวลาทำงานของคุณด้านล่าง</p>
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary">
-                <Calendar className="h-4 w-4" />
-                <span className="font-medium">
-                  {format(new Date(), 'EEEE, MMMM d, yyyy')}
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )
-    }
-
-    if (isCheckedOut) {
-      return (
-        <Card className="overflow-hidden gradient-success">
-          <CardContent className="pt-6">
-            <div className="text-center py-4 text-white">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/20 mb-4 animate-scale-in">
-                <CheckCircle className="h-10 w-10" />
-              </div>
-              <h3 className="text-xl font-bold mb-3">เสร็จสิ้น</h3>
-              <div className="space-y-2 text-white/90">
-                <p className="flex items-center justify-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  {format(new Date(todayRecord.date), 'EEEE, MMMM d, yyyy')}
-                </p>
-                <p className="flex items-center justify-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  เข้างาน: {format(new Date(todayRecord.check_in), 'HH:mm')} น. ({formatTo12Hour(format(new Date(todayRecord.check_in), 'HH:mm'))})
-                </p>
-                <p className="flex items-center justify-center gap-2">
-                  <LogOut className="h-4 w-4" />
-                  เลิกงาน: {format(new Date(todayRecord.check_out), 'HH:mm')} น. ({formatTo12Hour(format(new Date(todayRecord.check_out), 'HH:mm'))})
-                </p>
-              </div>
-              {todayRecord.ot_hours > 0 && (
-                <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20">
-                  <Clock className="h-4 w-4" />
-                  <span className="font-semibold">OT: {todayRecord.ot_hours} ชั่วโมง</span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )
-    }
-
+    const selectedDateObj = new Date(selectedDate)
+    const dateOptions = getDateOptions()
+    
     return (
-      <Card className="overflow-hidden gradient-blue">
+      <Card className="card-glass overflow-hidden">
         <CardContent className="pt-6">
-          <div className="text-center py-4 text-white">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/20 mb-4 animate-pulse-ring relative">
-              <Clock className="h-10 w-10" />
+          <div className="text-center mb-4">
+            {/* Date Selector */}
+            <div className="mb-4">
+              <Label className="text-sm font-medium text-muted-foreground mb-2 block">
+                เลือกวันที่ต้องการบันทึก
+              </Label>
+              <Select
+                value={selectedDate}
+                onValueChange={setSelectedDate}
+              >
+                <SelectTrigger className="h-14 text-lg font-semibold">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {dateOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <h3 className="text-xl font-bold mb-3">เช็คอินแล้ว</h3>
-            <div className="space-y-2 text-white/90">
-              <p className="flex items-center justify-center gap-2">
-                <Calendar className="h-4 w-4" />
-                {format(new Date(todayRecord.date), 'EEEE, MMMM d, yyyy')}
-              </p>
-              <p className="flex items-center justify-center gap-2">
-                <Clock className="h-4 w-4" />
-                ตั้งแต่: {format(new Date(todayRecord.check_in), 'HH:mm')} น. ({formatTo12Hour(format(new Date(todayRecord.check_in), 'HH:mm'))})
-              </p>
-            </div>
-            {todayRecord.ot_hours > 0 && (
-              <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20">
-                <Clock className="h-4 w-4" />
-                <span className="font-semibold">OT: {todayRecord.ot_hours} ชั่วโมง</span>
+
+            {!todayRecord ? (
+              <div className="py-4">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 mb-3 animate-float">
+                  <Clock className="h-10 w-10 text-white" />
+                </div>
+                <h3 className="text-lg font-bold mb-2">ยังไม่ได้บันทึก</h3>
+                <p className="text-muted-foreground text-sm">
+                  กรอกเวลาเข้า-ออกงานของคุณด้านล่าง
+                </p>
+              </div>
+            ) : isCheckedOut ? (
+              <div className="py-4">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 mb-3 animate-scale-in">
+                  <CheckCircle className="h-10 w-10 text-white" />
+                </div>
+                <h3 className="text-lg font-bold mb-3 text-green-600">บันทึกเรียบร้อยแล้ว</h3>
+                <div className="space-y-2">
+                  <p className="flex items-center justify-center gap-2 text-sm">
+                    <Clock className="h-4 w-4" />
+                    เข้างาน: {format(new Date(todayRecord.check_in), 'HH:mm')} น.
+                  </p>
+                  <p className="flex items-center justify-center gap-2 text-sm">
+                    <LogOut className="h-4 w-4" />
+                    เลิกงาน: {format(new Date(todayRecord.check_out), 'HH:mm')} น.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="py-4">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 mb-3 animate-pulse-ring">
+                  <Clock className="h-10 w-10 text-white" />
+                </div>
+                <h3 className="text-lg font-bold mb-3 text-blue-600">เข้างานแล้ว</h3>
+                <div className="space-y-2">
+                  <p className="flex items-center justify-center gap-2 text-sm">
+                    <Clock className="h-4 w-4" />
+                    ตั้งแต่: {format(new Date(todayRecord.check_in), 'HH:mm')} น.
+                  </p>
+                </div>
               </div>
             )}
+
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium">
+              <Calendar className="h-4 w-4" />
+              {format(selectedDateObj, 'EEEE, d MMM yyyy')}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -534,7 +588,7 @@ export default function CheckInOut() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">เวลาเลิกงาน *</Label>
+                  <Label className="text-sm font-medium">เวลาเลิกงาน</Label>
                   <div className="relative">
                     <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -542,29 +596,21 @@ export default function CheckInOut() {
                       inputMode="numeric"
                       value={checkOutTime}
                       onChange={(e) => handleTimeChange(e, false)}
-                      disabled={loading || !isCheckedIn}
+                      disabled={loading}
                       placeholder="00:00"
                       maxLength={5}
-                      className="pl-10 h-12 rounded-xl font-mono text-center text-lg disabled:opacity-50"
+                      className="pl-10 h-12 rounded-xl font-mono text-center text-lg"
                     />
                   </div>
-                  {checkOutTime && isCheckedIn && (
+                  {checkOutTime && (
                     <p className="text-xs text-blue-600 font-medium flex items-center gap-1">
                       <Clock className="h-3 w-3" />
                       = {formatTo12Hour(checkOutTime)}
                     </p>
                   )}
-                  {!isCheckedIn && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      เช็คอินก่อนจึงจะเช็คเอาท์ได้
-                    </p>
-                  )}
-                  {isCheckedIn && (
-                    <p className="text-xs text-muted-foreground">
-                      กรอกแบบ 24 ชม. (เช่น 17:00, 18:30, 21:00)
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground">
+                    กรอกแบบ 24 ชม. (เช่น 17:00, 18:30, 21:00) หรือเว้นว่างไว้
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">รูปถ่าย (ไม่บังคับ)</Label>
@@ -574,7 +620,6 @@ export default function CheckInOut() {
                     size="sm"
                     onClick={() => checkOutInputRef.current?.click()}
                     className="w-full h-12 rounded-xl"
-                    disabled={!isCheckedIn}
                   >
                     <Upload className="h-4 w-4 mr-2" />
                     อัปโหลดรูป
@@ -623,17 +668,22 @@ export default function CheckInOut() {
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   กำลังบันทึก...
                 </div>
+              ) : checkOutTime ? (
+                <div className="flex items-center gap-2">
+                  <Save className="h-5 w-5" />
+                  บันทึกเวลาเข้า-ออกงาน
+                </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <Save className="h-5 w-5" />
-                  บันทึกเวลาทำงาน
+                  บันทึกเวลาเข้างาน
                 </div>
               )}
             </Button>
 
             <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1">
               <CheckCircle className="h-3 w-3" />
-              สามารถบันทึกก่อน แล้วค่อยมาอัปโหลดรูปทีหลังได้
+              สามารถบันทึกทั้งเวลาเข้าและออกพร้อมกันได้ หรือบันทึกแยกกันก็ได้
             </p>
           </CardContent>
         </Card>
