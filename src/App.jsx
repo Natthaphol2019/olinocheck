@@ -13,6 +13,7 @@ import Requests from '@/pages/Requests'
 import LeaveRequests from '@/pages/LeaveRequests'
 import Overtime from '@/pages/Overtime'
 import Profile from '@/pages/Profile'
+import EmployeeDashboard from '@/pages/EmployeeDashboard'
 
 // Manager Pages
 import ManagerDashboard from '@/pages/manager/Dashboard'
@@ -93,6 +94,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['isEmployee']}>
                 <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['isEmployee']}>
+                <EmployeeDashboard />
               </ProtectedRoute>
             }
           />
