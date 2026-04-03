@@ -19,7 +19,9 @@ import {
   FileCheck,
   Briefcase,
   CheckCircle2,
-  UserCog
+  UserCog,
+  User,
+  Building
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
