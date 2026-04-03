@@ -86,40 +86,10 @@ export default function CheckInOut() {
       // Get selected date's record
       if (employee?.id) {
         await fetchDateRecord(selectedDate)
-        
-        // Auto-load employee's assigned shift
-        await loadEmployeeShift()
       }
     }
     fetchData()
   }, [employee?.id, selectedDate])
-
-  // Load employee's assigned shift
-  const loadEmployeeShift = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('employee_shifts')
-        .select(`
-          *,
-          shifts:shift_id (*)
-        `)
-        .eq('employee_id', employee.id)
-        .eq('is_active', true)
-        .lte('start_date', selectedDate)
-        .or(`end_date.is.null,end_date.gte.${selectedDate}`)
-        .order('start_date', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      if (error) throw error
-
-      if (data?.shifts) {
-        setSelectedShift(data.shifts.id)
-      }
-    } catch (error) {
-      console.error('Error loading employee shift:', error)
-    }
-  }
 
   // Generate last 7 days for dropdown
   const getDateOptions = () => {
@@ -423,56 +393,75 @@ export default function CheckInOut() {
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Shift Selection */}
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label className="text-sm font-semibold flex items-center gap-2">
                 <Clock className="h-4 w-4" />
-                กะงาน (เวลาทำงาน) *
+                เลือกกะงาน *
               </Label>
-              <Select value={selectedShift} onValueChange={setSelectedShift}>
-                <SelectTrigger className="h-12 rounded-xl">
-                  <SelectValue placeholder="เลือกกะงาน" />
-                </SelectTrigger>
-                <SelectContent>
-                  {shifts.map((shift) => (
-                    <SelectItem key={shift.id} value={shift.id}>
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: shift.color || '#3B82F6' }}
-                        />
-                        <span className="font-medium">{shift.name}</span>
-                        <span className="text-muted-foreground text-xs">
-                          ({formatTime(shift.start_time)} - {formatTime(shift.end_time)})
-                        </span>
-                        {shift.ot_start_time && shift.ot_end_time && (
-                          <span className="text-xs text-orange-600 font-medium">• มี OT</span>
-                        )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {shifts.map((shift) => {
+                  const isSelected = selectedShift === shift.id
+                  return (
+                    <button
+                      key={shift.id}
+                      type="button"
+                      onClick={() => setSelectedShift(shift.id)}
+                      className={cn(
+                        "relative p-4 rounded-xl border-2 transition-all duration-300 text-left",
+                        "hover:shadow-lg active:scale-98",
+                        isSelected
+                          ? "border-transparent shadow-xl"
+                          : "border-gray-200 hover:border-primary/50"
+                      )}
+                      style={{
+                        background: isSelected 
+                          ? `linear-gradient(135deg, ${shift.color || '#3B82F6'}, ${shift.color || '#3B82F6'}dd)`
+                          : 'white'
+                      }}
+                    >
+                      <div className={cn(
+                        "transition-all",
+                        isSelected ? "text-white" : "text-gray-900"
+                      )}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <div 
+                            className={cn(
+                              "w-4 h-4 rounded-full",
+                              isSelected ? "ring-2 ring-white ring-offset-2 ring-offset-transparent" : ""
+                            )}
+                            style={{ backgroundColor: shift.color || '#3B82F6' }}
+                          />
+                          <h3 className="font-bold text-lg">{shift.name}</h3>
+                        </div>
+                        <div className="space-y-1 text-sm">
+                          <p className={cn(isSelected ? "text-white/90" : "text-gray-600")}>
+                            เวลา: {formatTime(shift.start_time)} - {formatTime(shift.end_time)}
+                          </p>
+                          {shift.ot_start_time && shift.ot_end_time && (
+                            <p className={cn(isSelected ? "text-white/80" : "text-orange-600 font-medium")}>
+                              OT: {formatTime(shift.ot_start_time)} - {formatTime(shift.ot_end_time)}
+                            </p>
+                          )}
+                          {shift.grace_period_minutes && (
+                            <p className={cn(isSelected ? "text-white/80" : "text-yellow-600")}>
+                              สายหลังจาก: {(() => {
+                                const startTime = new Date(`2000-01-01 ${shift.start_time}`)
+                                const graceTime = new Date(startTime.getTime() + (shift.grace_period_minutes || 15) * 60000)
+                                return formatTime(graceTime.toISOString().substring(11, 16))
+                              })()} น.
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedShift && shifts.find(s => s.id === selectedShift) && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
-                  <CheckCircle className="h-4 w-4 text-blue-600" />
-                  <div>
-                    <p className="text-sm font-medium text-blue-900">
-                      {shifts.find(s => s.id === selectedShift)?.name}
-                    </p>
-                    <p className="text-xs text-blue-700">
-                      เวลาทำงาน: {formatTime(shifts.find(s => s.id === selectedShift)?.start_time)} - {formatTime(shifts.find(s => s.id === selectedShift)?.end_time)}
-                      {(() => {
-                        const shift = shifts.find(s => s.id === selectedShift);
-                        if (!shift?.grace_period_minutes || !shift?.start_time) return null;
-                        const startTime = new Date(`2000-01-01 ${shift.start_time}`);
-                        const graceTime = new Date(startTime.getTime() + shift.grace_period_minutes * 60000);
-                        const graceTimeStr = graceTime.toISOString().substring(11, 16);
-                        return ` (สายหลังจาก ${formatTime(graceTimeStr)} น.)`;
-                      })()}
-                    </p>
-                  </div>
-                </div>
-              )}
+                      {isSelected && (
+                        <div className="absolute top-2 right-2">
+                          <CheckCircle className="h-5 w-5 text-white" />
+                        </div>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
             {/* Work Type */}

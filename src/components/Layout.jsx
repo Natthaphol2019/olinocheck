@@ -51,7 +51,6 @@ export default function Layout({ children }) {
       items.push({ to: '/manager/reports', label: 'รายงาน', icon: FileText, mobileIcon: FileCheck })
     } else {
       items.push({ to: '/check-in', label: 'เช็คอิน/เอาท์', icon: Clock, mobileIcon: Home })
-      items.push({ to: '/my-shift', label: 'กะงานของฉัน', icon: Calendar, mobileIcon: Calendar })
       items.push({ to: '/history', label: 'ประวัติ', icon: History, mobileIcon: Clock })
       items.push({ to: '/requests', label: 'คำร้อง', icon: FileText, mobileIcon: ClipboardList })
       items.push({ to: '/leave', label: 'ลากิจ/ป่วย', icon: Calendar, mobileIcon: Calendar })
