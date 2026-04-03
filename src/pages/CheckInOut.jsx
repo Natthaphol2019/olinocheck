@@ -80,16 +80,46 @@ export default function CheckInOut() {
         .from('shifts')
         .select('*')
         .eq('is_active', true)
-        .order('start_time')
+        .order('display_order', { ascending: true })
       setShifts(data || [])
 
       // Get selected date's record
       if (employee?.id) {
         await fetchDateRecord(selectedDate)
+        
+        // Auto-load employee's assigned shift
+        await loadEmployeeShift()
       }
     }
     fetchData()
   }, [employee?.id, selectedDate])
+
+  // Load employee's assigned shift
+  const loadEmployeeShift = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('employee_shifts')
+        .select(`
+          *,
+          shifts:shift_id (*)
+        `)
+        .eq('employee_id', employee.id)
+        .eq('is_active', true)
+        .lte('start_date', selectedDate)
+        .or(`end_date.is.null,end_date.gte.${selectedDate}`)
+        .order('start_date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (error) throw error
+
+      if (data?.shifts) {
+        setSelectedShift(data.shifts.id)
+      }
+    } catch (error) {
+      console.error('Error loading employee shift:', error)
+    }
+  }
 
   // Generate last 7 days for dropdown
   const getDateOptions = () => {
@@ -396,7 +426,7 @@ export default function CheckInOut() {
             <div className="space-y-2">
               <Label className="text-sm font-semibold flex items-center gap-2">
                 <Clock className="h-4 w-4" />
-                Shift (Work Schedule) *
+                กะงาน (เวลาทำงาน) *
               </Label>
               <Select value={selectedShift} onValueChange={setSelectedShift}>
                 <SelectTrigger className="h-12 rounded-xl">
@@ -406,6 +436,10 @@ export default function CheckInOut() {
                   {shifts.map((shift) => (
                     <SelectItem key={shift.id} value={shift.id}>
                       <div className="flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: shift.color || '#3B82F6' }}
+                        />
                         <span className="font-medium">{shift.name}</span>
                         <span className="text-muted-foreground text-xs">
                           ({formatTime(shift.start_time)} - {formatTime(shift.end_time)})
@@ -418,11 +452,26 @@ export default function CheckInOut() {
                   ))}
                 </SelectContent>
               </Select>
-              {selectedShift && (
-                <p className="text-xs text-primary font-medium flex items-center gap-1">
-                  <CheckCircle className="h-3 w-3" />
-                  Selected: {shifts.find(s => s.id === selectedShift)?.name}
-                </p>
+              {selectedShift && shifts.find(s => s.id === selectedShift) && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                  <CheckCircle className="h-4 w-4 text-blue-600" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">
+                      {shifts.find(s => s.id === selectedShift)?.name}
+                    </p>
+                    <p className="text-xs text-blue-700">
+                      เวลาทำงาน: {formatTime(shifts.find(s => s.id === selectedShift)?.start_time)} - {formatTime(shifts.find(s => s.id === selectedShift)?.end_time)}
+                      {(() => {
+                        const shift = shifts.find(s => s.id === selectedShift);
+                        if (!shift?.grace_period_minutes || !shift?.start_time) return null;
+                        const startTime = new Date(`2000-01-01 ${shift.start_time}`);
+                        const graceTime = new Date(startTime.getTime() + shift.grace_period_minutes * 60000);
+                        const graceTimeStr = graceTime.toISOString().substring(11, 16);
+                        return ` (สายหลังจาก ${formatTime(graceTimeStr)} น.)`;
+                      })()}
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
 

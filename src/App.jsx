@@ -12,6 +12,7 @@ import History from '@/pages/History'
 import Requests from '@/pages/Requests'
 import LeaveRequests from '@/pages/LeaveRequests'
 import Overtime from '@/pages/Overtime'
+import MyShiftSchedule from '@/pages/MyShiftSchedule'
 
 // Manager Pages
 import ManagerDashboard from '@/pages/manager/Dashboard'
@@ -83,6 +84,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['isEmployee']}>
                 <Overtime />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-shift"
+            element={
+              <ProtectedRoute allowedRoles={['isEmployee']}>
+                <MyShiftSchedule />
               </ProtectedRoute>
             }
           />
