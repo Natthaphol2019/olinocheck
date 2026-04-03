@@ -7,7 +7,13 @@
       "Bash(npm run *)",
       "Bash(move *)",
       "Bash(node *)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(netstat *)",
+      "Bash(findstr *)",
+      "Bash(taskkill *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   },
   "$version": 3

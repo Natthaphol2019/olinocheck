@@ -21,6 +21,7 @@ import LeaveApprovals from '@/pages/manager/LeaveApprovals'
 import Reports from '@/pages/manager/Reports'
 import AttendanceToday from '@/pages/manager/AttendanceToday'
 import ShiftManagement from '@/pages/manager/ShiftManagement'
+import EmployeeAttendanceHistory from '@/pages/manager/EmployeeAttendanceHistory'
 
 function Unauthorized() {
   return (
@@ -140,6 +141,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['isHr', 'isAdmin']}>
                 <ShiftManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/manager/employee-attendance"
+            element={
+              <ProtectedRoute allowedRoles={['isHr', 'isAdmin']}>
+                <EmployeeAttendanceHistory />
               </ProtectedRoute>
             }
           />

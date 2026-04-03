@@ -12,6 +12,7 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
+    host: true,
   },
   build: {
     outDir: 'dist',
@@ -20,6 +21,16 @@ export default defineConfig({
     terserOptions: {
       compress: {
         drop_console: true,
+      },
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['react-router-dom'],
+          ui: ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-toast'],
+          charts: ['recharts'],
+        },
       },
     },
   },

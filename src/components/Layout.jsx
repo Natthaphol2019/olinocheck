@@ -46,6 +46,7 @@ export default function Layout({ children }) {
       if (role.isHr || role.isAdmin) {
         items.push({ to: '/manager/employees', label: 'พนักงาน', icon: Users })
         items.push({ to: '/manager/shifts', label: 'กะงาน', icon: Clock })
+        items.push({ to: '/manager/employee-attendance', label: 'ประวัติเข้างานพนักงาน', icon: UserCog })
       }
       items.push({ to: '/manager/reports', label: 'รายงาน', icon: FileText, mobileIcon: FileCheck })
     } else {
