@@ -72,7 +72,7 @@ export default function CheckInOut() {
     return `${String(h).padStart(2, '0')}:${m}`
   }
 
-  // Fetch shifts and selected date's record
+  // Fetch shifts and selected month's records
   useEffect(() => {
     const fetchData = async () => {
       // Get shifts
@@ -83,29 +83,57 @@ export default function CheckInOut() {
         .order('display_order', { ascending: true })
       setShifts(data || [])
 
-      // Get selected date's record
+      // Fetch current month's records
       if (employee?.id) {
-        await fetchDateRecord(selectedDate)
+        const currentMonth = format(new Date(), 'yyyy-MM')
+        setSelectedDate(currentMonth)
+        await fetchMonthRecords(currentMonth)
       }
     }
     fetchData()
-  }, [employee?.id, selectedDate])
+  }, [employee?.id])
 
-  // Generate last 7 days for dropdown
-  const getDateOptions = () => {
+  // Generate last 12 months for dropdown
+  const getMonthOptions = () => {
     const options = []
     const today = new Date()
+    const monthsThai = [
+      'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+      'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+    ]
     
-    for (let i = 0; i < 7; i++) {
-      const date = subDays(today, i)
-      const value = format(date, 'yyyy-MM-dd')
-      const label = i === 0 ? 'วันนี้' : 
-                    i === 1 ? 'เมื่อวาน' :
-                    format(date, 'd MMM yyyy')
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(today.getFullYear(), today.getMonth() - i, 1)
+      const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      const label = `${monthsThai[date.getMonth()]} ${date.getFullYear() + 543}`
       options.push({ value, label })
     }
     
     return options
+  }
+
+  // Fetch records for specific month
+  const fetchMonthRecords = async (yearMonth) => {
+    if (!employee?.id || !yearMonth) return
+    
+    setRecordsLoading(true)
+    try {
+      const [year, month] = yearMonth.split('-')
+      const startDate = `${year}-${month}-01`
+      const lastDay = new Date(year, month, 0).getDate()
+      const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`
+
+      const data = await getTimeRecords(employee.id, startDate, endDate)
+      setRecords(data || [])
+    } catch (error) {
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        description: error.message,
+        variant: 'destructive',
+      })
+    } finally {
+      setRecordsLoading(false)
+    }
   }
 
   // Fetch record for specific date
@@ -251,8 +279,9 @@ export default function CheckInOut() {
       if (checkInInputRef.current) checkInInputRef.current.value = ''
       if (checkOutInputRef.current) checkOutInputRef.current.value = ''
 
-      // Refresh the record
-      await fetchDateRecord(selectedDate)
+      // Refresh the records for current month
+      const currentMonth = format(new Date(), 'yyyy-MM')
+      await fetchMonthRecords(currentMonth)
     } catch (err) {
       toast({
         title: 'ข้อผิดพลาด',
@@ -280,27 +309,31 @@ export default function CheckInOut() {
   ]
 
   const getStatusCard = () => {
-    const selectedDateObj = new Date(selectedDate)
-    const dateOptions = getDateOptions()
+    const monthOptions = getMonthOptions()
+    const [selectedYear, selectedMonthNum] = selectedDate.split('-')
+    const selectedMonthObj = new Date(selectedYear, parseInt(selectedMonthNum) - 1)
     
     return (
       <Card className="card-glass overflow-hidden">
         <CardContent className="pt-6">
           <div className="text-center mb-4">
-            {/* Date Selector */}
+            {/* Month Selector */}
             <div className="mb-4">
               <Label className="text-sm font-medium text-muted-foreground mb-2 block">
-                เลือกวันที่ต้องการบันทึก
+                เลือกเดือนที่ต้องการบันทึก
               </Label>
               <Select
                 value={selectedDate}
-                onValueChange={setSelectedDate}
+                onValueChange={(value) => {
+                  setSelectedDate(value)
+                  fetchMonthRecords(value)
+                }}
               >
                 <SelectTrigger className="h-14 text-lg font-semibold">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {dateOptions.map((option) => (
+                  {monthOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -353,7 +386,7 @@ export default function CheckInOut() {
 
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium">
               <Calendar className="h-4 w-4" />
-              {format(selectedDateObj, 'EEEE, d MMM yyyy')}
+              {format(selectedMonthObj, `EEEE d MMMM yyyy`)}
             </div>
           </div>
         </CardContent>

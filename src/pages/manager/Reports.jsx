@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import Layout from '@/components/Layout'
 import { getAllTimeRecords } from '@/services/timeService'
 import { getAllEmployees } from '@/services/employeeService'
+import { supabase } from '@/services/supabase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -20,6 +21,7 @@ export default function Reports() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [loading, setLoading] = useState(false)
   const [attendanceData, setAttendanceData] = useState([])
+  const [archiving, setArchiving] = useState(false)
 
   const monthsThai = [
     'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
@@ -366,6 +368,93 @@ export default function Reports() {
     })
   }
 
+  const handleArchiveAndDeleteImages = async () => {
+    if (!window.confirm(
+      `ต้องการสรุปและลบรูปภาพเดือน ${monthsThai[selectedMonth]} ${selectedYear + 543} ใช่หรือไม่?\n\n` +
+      `ระบบจะ:\n` +
+      `✅ เก็บข้อมูลเวลาเข้า-ออกงานไว้\n` +
+      `✅ ลบรูปภาพเช็คอิน/เช็คเอาท์ทั้งหมด\n` +
+      `✅ ลบไฟล์แนบคำร้องทั้งหมด\n\n` +
+      `การกระทำนี้ไม่สามารถย้อนกลับได้`
+    )) {
+      return
+    }
+
+    setArchiving(true)
+    try {
+      const startDate = format(startOfMonth(new Date(selectedYear, selectedMonth)), 'yyyy-MM-dd')
+      const endDate = format(endOfMonth(new Date(selectedYear, selectedMonth)), 'yyyy-MM-dd')
+
+      // Get all records for the month
+      const { data: records, error: fetchError } = await supabase
+        .from('time_records')
+        .select('check_in_image, check_out_image')
+        .gte('date', startDate)
+        .lte('date', endDate)
+
+      if (fetchError) throw fetchError
+
+      if (!records || records.length === 0) {
+        toast({
+          title: 'ไม่มีข้อมูล',
+          description: 'ไม่มีข้อมูลการเข้างานในเดือนนี้',
+        })
+        setArchiving(false)
+        return
+      }
+
+      // Collect all image URLs
+      const imageUrls = []
+      records.forEach(record => {
+        if (record.check_in_image) imageUrls.push(record.check_in_image)
+        if (record.check_out_image) imageUrls.push(record.check_out_image)
+      })
+
+      // Delete images from storage
+      let deletedCount = 0
+      for (const url of imageUrls) {
+        try {
+          // Extract file path from URL
+          const filePath = url.split('/attendance/')[1]
+          if (filePath) {
+            const { error: deleteError } = await supabase.storage
+              .from('attendance')
+              .remove([filePath])
+            
+            if (!deleteError) deletedCount++
+          }
+        } catch (err) {
+          console.error('Error deleting image:', err)
+        }
+      }
+
+      // Update database to remove image references
+      const { error: updateError } = await supabase
+        .from('time_records')
+        .update({ check_in_image: null, check_out_image: null })
+        .gte('date', startDate)
+        .lte('date', endDate)
+
+      if (updateError) throw updateError
+
+      toast({
+        title: 'สรุปข้อมูลสำเร็จ',
+        description: `ลบรูปภาพ ${deletedCount} ไฟล์, เก็บข้อมูลเวลา ${records.length} รายการ`,
+      })
+
+      // Refresh data
+      fetchAttendanceData()
+    } catch (error) {
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        description: error.message,
+        variant: 'destructive',
+      })
+    } finally {
+      setArchiving(false)
+    }
+  }
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -484,6 +573,15 @@ export default function Reports() {
                   >
                     <FileText className="h-4 w-4" />
                     พิมพ์/PDF
+                  </Button>
+                  <Button
+                    onClick={handleArchiveAndDeleteImages}
+                    disabled={archiving || attendanceData.length === 0}
+                    variant="outline"
+                    className="gap-2 border-orange-600 text-orange-600 hover:bg-orange-50"
+                  >
+                    <Calendar className="h-4 w-4" />
+                    {archiving ? 'กำลังสรุป...' : 'สรุปและลบรูป'}
                   </Button>
                 </div>
               </div>
