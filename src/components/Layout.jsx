@@ -45,12 +45,14 @@ export default function Layout({ children }) {
       items.push({ to: '/manager/leave-approvals', label: 'อนุมัติลา', icon: Calendar, mobileIcon: Calendar })
       if (role.isHr || role.isAdmin) {
         items.push({ to: '/manager/employees', label: 'พนักงาน', icon: Users })
+        items.push({ to: '/manager/departments', label: 'แผนก', icon: Building })
         items.push({ to: '/manager/shifts', label: 'กะงาน', icon: Clock })
         items.push({ to: '/manager/employee-attendance', label: 'ประวัติเข้างานพนักงาน', icon: UserCog })
       }
       items.push({ to: '/manager/reports', label: 'รายงาน', icon: FileText, mobileIcon: FileCheck })
     } else {
       items.push({ to: '/check-in', label: 'เช็คอิน/เอาท์', icon: Clock, mobileIcon: Home })
+      items.push({ to: '/profile', label: 'ข้อมูลส่วนตัว', icon: User })
       items.push({ to: '/history', label: 'ประวัติ', icon: History, mobileIcon: Clock })
       items.push({ to: '/requests', label: 'คำร้อง', icon: FileText, mobileIcon: ClipboardList })
       items.push({ to: '/leave', label: 'ลากิจ/ป่วย', icon: Calendar, mobileIcon: Calendar })

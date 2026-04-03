@@ -12,6 +12,7 @@ import History from '@/pages/History'
 import Requests from '@/pages/Requests'
 import LeaveRequests from '@/pages/LeaveRequests'
 import Overtime from '@/pages/Overtime'
+import Profile from '@/pages/Profile'
 
 // Manager Pages
 import ManagerDashboard from '@/pages/manager/Dashboard'
@@ -22,6 +23,7 @@ import Reports from '@/pages/manager/Reports'
 import AttendanceToday from '@/pages/manager/AttendanceToday'
 import ShiftManagement from '@/pages/manager/ShiftManagement'
 import EmployeeAttendanceHistory from '@/pages/manager/EmployeeAttendanceHistory'
+import DepartmentManagement from '@/pages/manager/DepartmentManagement'
 
 function Unauthorized() {
   return (
@@ -86,6 +88,14 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute allowedRoles={['isEmployee']}>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Manager Routes */}
           <Route
@@ -141,6 +151,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['isHr', 'isAdmin']}>
                 <ShiftManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/manager/departments"
+            element={
+              <ProtectedRoute allowedRoles={['isHr', 'isAdmin']}>
+                <DepartmentManagement />
               </ProtectedRoute>
             }
           />
