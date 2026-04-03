@@ -8,8 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/use-toast'
-import { User, Key, Building, Mail, Shield, CheckCircle, Save } from 'lucide-react'
-import { format } from 'date-fns'
+import { User, Key, Shield, CheckCircle, Save } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export default function Profile() {
@@ -154,26 +153,6 @@ export default function Profile() {
 
             {/* Info Grid */}
             <div className="grid gap-4">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Mail className="h-5 w-5 text-gray-500" />
-                  <div>
-                    <p className="text-sm text-gray-500">อีเมล</p>
-                    <p className="font-medium">{employee.email || '-'}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Building className="h-5 w-5 text-gray-500" />
-                  <div>
-                    <p className="text-sm text-gray-500">แผนก</p>
-                    <p className="font-medium">{employee.department?.name || '-'}</p>
-                  </div>
-                </div>
-              </div>
-
               <div className="p-4 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-3">
                   <Shield className="h-5 w-5 text-gray-500" />
